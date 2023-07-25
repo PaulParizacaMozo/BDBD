@@ -55,7 +55,7 @@ public:
 
         pageTableCLOCK.resize(sizeBufferPool);
         for(auto& frame : pageTableCLOCK){
-            frame.resize(6); // frameId,Pageid,DirtyBit,BitRef,puntero,LastUsed
+            frame.resize(6); // frameId,Pageid,DirtyBit,BitRef,puntero,PinCount
         }
         for (int i=0; i<pageTableCLOCK.size(); i++){
             for (int j=0; j<pageTableCLOCK[0].size(); j++){
@@ -77,7 +77,8 @@ public:
         Page* pagina = CLOCK(pageId);
         return pagina;
     }
-
+    
+    //Funcion clocl
     Page* CLOCK(int pageId){
         //CASO1: el frame se encuentra en el buffer pool 
         for (int i=0; i<(int)pageTableCLOCK.size(); i++){
@@ -85,11 +86,7 @@ public:
                 if (pageTableCLOCK[i][3] == 0) {//BitRef
                     pageTableCLOCK[i][3] = 1;
                 }
-                for(int k=0; k<(int)pageTableCLOCK.size(); k++){ //Last used
-                    if(pageTableCLOCK[k][1]!=-1){
-                        pageTableCLOCK[k][5]++;
-                    }
-                }
+                pageTableCLOCK[i][5]++;//PinCount
                 return &bufferPool[i];
             }
         }
@@ -97,15 +94,11 @@ public:
         for (int i=0; i<pageTableCLOCK.size(); i++){
             if(pageTableCLOCK[i][1]==-1){
             cout<<"Entra"<<endl;
-                for(int k=0; k<pageTableCLOCK.size(); k++){//Last used
-                    if(pageTableCLOCK[k][1]!=-1){
-                        pageTableCLOCK[k][5]++;
-                    }
-                }
+                //Seteo de pagina en el frame pageId,DirtyBit,RefBit,PinCount
                 pageTableCLOCK[i][1] = pageId;
                 pageTableCLOCK[i][2] = 0;
                 pageTableCLOCK[i][3] = 1;
-                pageTableCLOCK[i][5] = 0;
+                pageTableCLOCK[i][5] = 1;
                 
                 return &bufferPool[i];
             }  
@@ -116,50 +109,37 @@ public:
         while (true) {
             //showpageTableCLOCK();
             int posPtr = posicionPuntero();
-            //cout<<posPtr<<endl;
+
             if(pageTableCLOCK[posPtr][3] == 1){
                 pageTableCLOCK[posPtr][3] = 0;
                 moverPuntero();
             }
             else {
+                if (pageTableCLOCK[posPtr][5] != 0){
+                    showpageTableCLOCK();
+                    char c;
+                    cout<<" Este bloque fue solicitado "<<pageTableCLOCK[posPtr][5]<<" veces. Desea liberar el bloque "<<pageTableCLOCK[posPtr][1]<<" (y/n): ";
+                    cin>>c;
+                    if (c == 'n') {
+                        moverPuntero();
+                        continue;
+                    }
+                }
                 if (pageTableCLOCK[posPtr][2] == 0) {
                     pageTableCLOCK[posPtr][1] = pageId;
                     pageTableCLOCK[posPtr][2] = 0;
                     pageTableCLOCK[posPtr][3] = 1;
-                    pageTableCLOCK[posPtr][5] = 0;
+                    pageTableCLOCK[posPtr][5] = 1;
                     moverPuntero();
                     return &bufferPool[posPtr];
                 }
                 else {
-                    char confirmacion;
-                    cout<<" Se realizaron cambios en esta pagina, desea guardar los cambios(y/n): ";
-                    cin>>confirmacion;
-                    if (confirmacion == 'y') {
-
-                        diskController->bloqueASector(pageTableCLOCK[posPtr][1]);
-                        cout<<"Se escribio la informacion del bloque "<<posPtr+1<<" correctamente en el disco."<<endl;
-                        pageTableCLOCK[posPtr][1] = pageId;
-                        pageTableCLOCK[posPtr][2] = 0;
-                        pageTableCLOCK[posPtr][3] = 1;
-                        pageTableCLOCK[posPtr][5] = 0;
-                        moverPuntero();
-                        return &bufferPool[posPtr];
-                    }
-                    else {
-                        pageTableCLOCK[posPtr][1] = pageId;
-                        pageTableCLOCK[posPtr][2] = 0;
-                        pageTableCLOCK[posPtr][3] = 1;
-                        pageTableCLOCK[posPtr][5] = 0;
-                        moverPuntero();
-                        return &bufferPool[posPtr];
-                    }
+                    return UnpinFrame(pageId);
                 }
-       
             }
         }
         return nullptr;
     }
-
     int posicionPuntero(){
         for(int i=0; i<(int)pageTableCLOCK.size(); i++){
             if(pageTableCLOCK[i][4] == 1){
@@ -321,6 +301,122 @@ public:
         }
     }
 
+    Page * UnpinFrame(int pageId){
+        int posPtr = posicionPuntero();
+        char confirmacion;
+        cout<<" Se realizaron cambios en esta pagina, desea guardar los cambios(y/n): ";
+        cin>>confirmacion;
+        if (confirmacion == 'y') {
+            diskController->bloqueASector(pageTableCLOCK[posPtr][1]);
+            cout<<"Se escribio la informacion del bloque "<<posPtr+1<<" correctamente en el disco."<<endl;
+            pageTableCLOCK[posPtr][1] = pageId;
+            pageTableCLOCK[posPtr][2] = 0;
+            pageTableCLOCK[posPtr][3] = 1;
+            pageTableCLOCK[posPtr][5] = 1;
+            moverPuntero();
+            return &bufferPool[posPtr];
+        }
+        else {
+            pageTableCLOCK[posPtr][1] = pageId;
+            pageTableCLOCK[posPtr][2] = 0;
+            pageTableCLOCK[posPtr][3] = 1;
+            pageTableCLOCK[posPtr][5] = 1;
+            moverPuntero();
+            return &bufferPool[posPtr];
+        }
+    }
+
+    void LimpiarBufferPool(){
+        for (int i=0; i<(int)pageTableCLOCK.size(); i++){
+            if (pageTableCLOCK[i][2] != 1) {//Dirtybit
+                pageTableCLOCK[i][1] = -1;
+                pageTableCLOCK[i][2] = -1;
+                pageTableCLOCK[i][3] = -1;
+                pageTableCLOCK[i][4] = -1;
+                pageTableCLOCK[i][5] = -1;
+            }
+            else {
+                char confirmacion;
+                cout<<" Se realizaron cambios en esta pagina, desea guardar los cambios(y/n): ";
+                cin>>confirmacion;
+                if (confirmacion == 'y') {
+                    diskController->bloqueASector(pageTableCLOCK[i][1]);
+                    cout<<"Se escribio la informacion del bloque "<<pageTableCLOCK[i][1]<<" correctamente en el disco."<<endl;
+                    pageTableCLOCK[i][1] = -1;
+                    pageTableCLOCK[i][2] = -1;
+                    pageTableCLOCK[i][3] = -1;
+                    pageTableCLOCK[i][5] = -1;
+                    pageTableCLOCK[i][4] = -1;
+                }
+                else {
+                    pageTableCLOCK[i][1] = -1;
+                    pageTableCLOCK[i][2] = -1;
+                    pageTableCLOCK[i][3] = -1;
+                    pageTableCLOCK[i][4] = -1;
+                    pageTableCLOCK[i][5] = -1;
+                }
+            }
+        }
+        pageTableCLOCK[0][4] = 1; //Seteo del puntero del reloj
+    }
+    void LimpiarPageBufferPool(int pageId){
+        for (int i=0; i<(int)pageTableCLOCK.size(); i++){
+            if(pageTableCLOCK[i][1]==pageId){
+                if (pageTableCLOCK[i][2] != 1) {//Dirtybit
+                    pageTableCLOCK[i][1] = -1;
+                    pageTableCLOCK[i][2] = -1;
+                    pageTableCLOCK[i][3] = -1;
+                    pageTableCLOCK[i][5] = -1;
+                    if (pageTableCLOCK[i][4] == 1) {
+                        moverPuntero();
+                        pageTableCLOCK[i][4] = -1;
+                    }
+                }
+                else {
+                    int posPtr = posicionPuntero();
+                    char confirmacion;
+                    cout<<" Se realizaron cambios en esta pagina, desea guardar los cambios(y/n): ";
+                    cin>>confirmacion;
+                    if (confirmacion == 'y') {
+                        diskController->bloqueASector(pageTableCLOCK[posPtr][1]);
+                        cout<<"Se escribio la informacion del bloque "<<posPtr+1<<" correctamente en el disco."<<endl;
+                        pageTableCLOCK[posPtr][1] = -1;
+                        pageTableCLOCK[posPtr][2] = -1;
+                        pageTableCLOCK[posPtr][3] = -1;
+                        pageTableCLOCK[posPtr][5] = -1;
+                        if (pageTableCLOCK[i][4] == 1) {
+                            moverPuntero();
+                            pageTableCLOCK[i][4] = -1;
+                        }
+                    }
+                    else {
+                        pageTableCLOCK[posPtr][1] = -1;
+                        pageTableCLOCK[posPtr][2] = -1;
+                        pageTableCLOCK[posPtr][3] = -1;
+                        pageTableCLOCK[posPtr][5] = -1;
+                        if (pageTableCLOCK[i][4] == 1) {
+                            moverPuntero();
+                            pageTableCLOCK[i][4] = -1;
+                        }
+                    }
+                }
+                return;
+            }
+        }
+        cout<<"La pagina que desea limpiar del bufferPool no se encuentra en el ahora mismo."<<endl;
+    }
+
+    void PinCountACero(int pageId){
+        for (int i=0; i<(int)pageTableCLOCK.size(); i++){
+            if(pageTableCLOCK[i][1]==pageId){
+                pageTableCLOCK[i][5] = 0;
+                return;
+            }
+        }
+        cout<<"La pagina no se encuentra en el ahora mismo."<<endl;
+    }
+
+
     void showpageTableLRU(){
         cout<<"\n LRU tabla \n";
         for (int i=0; i<pageTableLRU.size(); i++){
@@ -334,6 +430,7 @@ public:
 
     void showpageTableCLOCK(){
         cout<<"\n CLOCK tabla \n";
+        cout<<"frame\tpage\tDB\tRefB\tPtr\tPinC\n";
         for (int i=0; i<pageTableCLOCK.size(); i++){
             for (int j=0; j<pageTableCLOCK[0].size(); j++){
                 cout<<pageTableCLOCK[i][j]<<"\t";
