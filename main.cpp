@@ -21,6 +21,7 @@ int main(){
         cout<<"\nIngrese una opcion:\n";
         cout<<"[1] Menu de Disco\n";
         cout<<"[2] Menu del sistema de Base de Datos\n";
+        cout<<"[3] Menu del Buffer\n";
         cin>>opc;
         if(opc==1){
             int opc2;
@@ -188,7 +189,37 @@ int main(){
                 sistema.createTable_Variable(prompt);
             }
 
-        } else if(opc==0){
+        } 
+        else if(opc==3){
+            cout<<"[1] Mostrar Tabla\n";
+            cout<<"[2] Limpiar todo el bufferPool\n";
+            cout<<"[3] Limpiar una pagina del bufferPool\n";
+            cout<<"[4] PinCount a 0 \n";
+            int opc3;
+            cin>>opc3;
+            cin.ignore();
+            if(opc3==1){
+                sistema.bufferManager->showpageTableCLOCK();
+            } else if(opc3==2){
+                sistema.bufferManager->LimpiarBufferPool();
+            }
+            else if(opc3==3){
+                int aux;
+                cout<<" Ingrese la pagina a limpiar del bufferPool: ";
+                cin>>aux;
+                cin.ignore();
+                sistema.bufferManager->LimpiarPageBufferPool(aux);
+            }
+            else if(opc3==4){
+                int aux;
+                cout<<" Ingrese la pagina del bufferPool: ";
+                cin>>aux;
+                cin.ignore();
+                sistema.bufferManager->PinCountACero(aux);
+            }
+        }
+        
+        else if(opc==0){
             salir = true;
         }
     }
